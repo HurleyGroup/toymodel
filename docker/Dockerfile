@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
     sudo \
     bzip2 \
     libx11-6 \
-    bc
+    bc \
+    ffmpeg
 
 ## install anaconda
 ENV CONDA_PATH=/AnacondaInstall
