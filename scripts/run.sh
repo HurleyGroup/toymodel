@@ -10,7 +10,7 @@ export KS=1000
 export M=40
 
 # Loading conditions
-export CA=0
+export CA=25
 export LOAD=100
 export INT_TIME=0.04
 
@@ -48,8 +48,11 @@ python -u /code/src/initCond.py -p $STRESS_PATH -a $CA -hp $PRESSURE
 # generate model
 python -u /code/src/toymodel.py -p $STRESS_PATH -l $LOAD -a $CA -hp $PRESSURE
 
+# run unconstrained case
+python -u /code/src/odesolve.py -p $STRESS_PATH -i $STRESS_IMG -a $CA
+
 # run constrained case
-python -u /code/src/odesolve.py -p $STRESS_RISE -a $CA  --maintain
+python -u /code/src/odesolve.py -p $STRESS_PATH -i $STRESS_IMG -a $CA --maintain
 
 exit 0
 
