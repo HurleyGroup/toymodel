@@ -49,14 +49,16 @@ PLOT = True
 
 # read in arguments and important variables
 parser = argparse.ArgumentParser()
-parser.add_argument("-p", "--postpath", help="specify the post path (output of stress rise)", type=str)
+parser.add_argument("-p", "--postpath", help="specify the post path", type=str)
+parser.add_argument("-i", "--imgpath", help="specify the image path", type=str)
 parser.add_argument("-a", "--ca", help="specify the configuration angle", type=float)
 parser.add_argument('--maintain', action=argparse.BooleanOptionalAction, help="whether to constrain hydrostatic pressure as constant or not")
 args = parser.parse_args()
 
 POST_PATH = args.postpath
+IMG_PATH = args.imgpath
 THETA = args.ca
-maintain=args.maintain # If true, then we apply constraint
+MAINTAIN=args.maintain # If true, then we apply constraint
 
 PI = 3.141592654
 
@@ -127,16 +129,17 @@ with open(POST_PATH+'init_dof.pkl', 'rb') as ff:
 x10, y10, y20 = init_dof
 xd0 = np.zeros((3,1))
 
-u0 = np.linalg.inv(hD_lambdaN(*init_dof).T.dot(hD_lambdaN(*init_dof))).dot(hD_lambdaN(*init_dof).T).dot(
-            xd0 - hC_lambdaN(*init_dof).T*hv_lambdaN(*init_dof))
+if MAINTAIN:
+    u0 = np.linalg.inv(hD_lambdaN(*init_dof).T.dot(hD_lambdaN(*init_dof))).dot(hD_lambdaN(*init_dof).T).dot(
+                xd0 - hC_lambdaN(*init_dof).T*hv_lambdaN(*init_dof))
 
-
-state_vector_0 = [x10, y10, y20, u0[0,0], u0[1,0]]
-
+    state_vector_0 = [x10, y10, y20, u0[0,0], u0[1,0]]
+else:
+    state_vector_0 = [x10, y10, y20, xd0[0,0], xd0[1,0], xd0[2,0]]
 
 
 # Now perform solving of system (v is 0)
-def helper(t, vars): # x1, y1, y2, u1, u2
+def helperMAINTAIN(t, vars): # x1, y1, y2, u1, u2
     ## actual stuff
     D = hD_lambdaN(vars[0], vars[1], vars[2])
     u = np.array([vars[3], vars[4]]).reshape((2,1)).astype(np.float64)
@@ -154,6 +157,16 @@ def helper(t, vars): # x1, y1, y2, u1, u2
 
     return [xdot[0], xdot[1], xdot[2], udot[0], udot[1]]
 
+def helperNOMAINTAIN(t, vars): # x1, y1, y2, x1d, y1d, y2d
+    x = [vars[0], vars[1], vars[2]]
+    xdot = [vars[3], vars[4], vars[5]]
+
+    f1 = f1_lambda(x[0], x[1], x[2], xdot[0], xdot[1], xdot[2])
+    f2 = f2_lambda(x[0], x[1], x[2], xdot[0], xdot[1], xdot[2])
+    f3 = f3_lambda(x[0], x[1], x[2], xdot[0], xdot[1], xdot[2])
+
+    return [xdot[0], xdot[1], xdot[2], f1, f2, f3]
+
 
 print('Integrating.')
 start = 0
@@ -161,19 +174,40 @@ end = INT_TIME
 points = 100
 tspan = np.linspace(start, end, points)
 
-sol = solve_ivp(helper, [tspan[0], tspan[-1]],
+if MAINTAIN:
+    sol = solve_ivp(helperMAINTAIN, [tspan[0], tspan[-1]],
+                        state_vector_0,
+                        t_eval=tspan)
+else:
+    sol = solve_ivp(helperNOMAINTAIN, [tspan[0], tspan[-1]],
                         state_vector_0,
                         t_eval=tspan)
 
-print('Saving Solution.')
-with open(POST_PATH+'sol.pkl', mode='wb') as file:
-   cloudpickle.dump(sol, file)
 
+
+print('Saving Solution.')
+soln_x1, soln_y1, soln_y2  = np.zeros(len(sol.t)),  np.zeros(len(sol.t)),  np.zeros(len(sol.t))
 soln_vx1, soln_vy1, soln_vy2  = np.zeros(len(sol.t)),  np.zeros(len(sol.t)),  np.zeros(len(sol.t))
 
 for t in range(len(sol.t)):
-    soln_vx1[t], soln_vy1[t], soln_vy2[t]  = hD_lambdaN(sol.y[0][t], sol.y[1][t], sol.y[2][t]).dot(np.array([sol.y[3][t], sol.y[4][t]]).reshape(2,1))
+    soln_x1[t], soln_y1[t], soln_y2[t]  = sol.y[0][t], sol.y[1][t], sol.y[2][t]
 
+if MAINTAIN:
+    for t in range(len(sol.t)):
+        soln_vx1[t], soln_vy1[t], soln_vy2[t]  = hD_lambdaN(sol.y[0][t], sol.y[1][t], sol.y[2][t]).dot(np.array([sol.y[3][t], sol.y[4][t]]).reshape(2,1))
+else:
+    for t in range(len(sol.t)):
+        soln_vx1[t], soln_vy1[t], soln_vy2[t]  = sol.y[3][t], sol.y[4][t], sol.y[5][t]
+
+soln = [sol.t, soln_x1, soln_y1, soln_y2, soln_vx1, soln_vy1, soln_vy2]
+
+
+if MAINTAIN:
+    with open(POST_PATH+'solMAINTAIN.pkl', mode='wb') as file:
+       cloudpickle.dump(soln, file)
+else:
+    with open(POST_PATH+'solNOMAINTAIN.pkl', mode='wb') as file:
+       cloudpickle.dump(soln, file)
 
 if PLOT:
     print('Plotting.')
@@ -185,34 +219,32 @@ if PLOT:
 
     # phase plots
     for i in range(len(sol.t) - 1):
-        ax1.plot(sol.t[i:i+2], sol.y[0][i:i+2], '.-', color=cmap(norm(sol.t[i])))
-        ax2.plot(sol.y[0][i:i+2], soln_vx1[i:i+2], '.-', color=cmap(norm(sol.t[i])))
-        ax3.plot(sol.t[i:i+2], sol.y[1][i:i+2], '.-', color=cmap(norm(sol.t[i])))
-        ax4.plot(sol.y[1][i:i+2], soln_vy1[i:i+2], '.-', color=cmap(norm(sol.t[i])))
-        ax5.plot(sol.t[i:i+2], sol.y[2][i:i+2], '.-', color=cmap(norm(sol.t[i])))
-        ax6.plot(sol.y[2][i:i+2], soln_vy2[i:i+2], '.-', color=cmap(norm(sol.t[i])))
+        ax1.plot(sol.t[i:i+2], soln_x1[i:i+2], '.-', color=cmap(norm(sol.t[i])))
+        ax2.plot(soln_x1[i:i+2], soln_vx1[i:i+2], '.-', color=cmap(norm(sol.t[i])))
+        ax3.plot(sol.t[i:i+2], soln_y1[i:i+2], '.-', color=cmap(norm(sol.t[i])))
+        ax4.plot(soln_y1[i:i+2], soln_vy1[i:i+2], '.-', color=cmap(norm(sol.t[i])))
+        ax5.plot(sol.t[i:i+2], soln_y2[i:i+2], '.-', color=cmap(norm(sol.t[i])))
+        ax6.plot(soln_y2[i:i+2], soln_vy2[i:i+2], '.-', color=cmap(norm(sol.t[i])))
 
 
     cbar = plt.colorbar(plt.cm.ScalarMappable(cmap=cmap, norm=norm), ax=axes.ravel().tolist())
 
-    plt.savefig('/code/test.png')
+    if MAINTAIN:
+        plt.savefig(IMG_PATH+'phasePlotsMAINTAIN.png')
+    else:
+        plt.savefig(IMG_PATH+'phasePlotsNOMAINTAIN.png')
 
     # middle particle trajectory
     fig = plt.figure()
     for i in range(len(sol.t) - 1):
-        plt.plot(sol.y[0][i:i+2], sol.y[1][i:i+2], '.-', color=cmap(norm(sol.t[i])))
+        plt.plot(soln_x1[i:i+2], soln_y1[i:i+2], '.-', color=cmap(norm(sol.t[i])))
 
     cbar = plt.colorbar(plt.cm.ScalarMappable(cmap=cmap, norm=norm), ax=fig.get_axes())
 
-    plt.savefig('/code/test1.png')
-
-    # middle particle 3D trajectory phase plot
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
-    for i in range(len(sol.t) - 1):
-        ax.plot(sol.y[0][i:i+2], sol.y[1][i:i+2], np.sqrt(soln_vx1[i:i+2]**2 + soln_vy1[i:i+2]**2), '.-', color=cmap(norm(sol.t[i])))
-
-    plt.savefig('/code/test2.png')
+    if MAINTAIN:
+        plt.savefig(IMG_PATH+'middleTrajectoryMAINTAIN.png')
+    else:
+        plt.savefig(IMG_PATH+'middleTrajectoryNOMAINTAIN.png')
 
 else:
     print('Skipping Plot.')
