@@ -15,7 +15,7 @@ args = parser.parse_args()
 
 # given these configurations, we need to get particle positions we have right pressure.
 KN = float(os.environ['KN'])
-KS = float(os.environ['KS_RISE'])
+KS = float(os.environ['KS'])
 R = float(os.environ['R'])
 POST_PATH = args.postpath
 THETA = args.ca # in degrees!
