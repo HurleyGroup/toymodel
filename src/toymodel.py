@@ -14,7 +14,7 @@ args = parser.parse_args()
 
 PI = 3.141592654
 
-KN, KT, KS = float(os.environ['KN']), float(os.environ['KT']), float(os.environ['KS_RISE'])
+KN, KT, KS = float(os.environ['KN']), float(os.environ['KT']), float(os.environ['KS'])
 MU, R, M = float(os.environ['MU']), float(os.environ['R']), float(os.environ['M'])
 
 POST_PATH = args.postpath
@@ -219,9 +219,9 @@ noddyDdot = Matrix([ noddyD[0].diff(t), noddyD[1].diff(t), noddyD[2].diff(t), no
 
 # function, f, for ODE solvers; (acceleration terms removed!)
 print('Finding fns.')
-f1 = (firsteq - collect(firsteq, x1d.diff(t),evaluate=False, exact=False)[x1d.diff(t)]*x1d.diff(t))/m
-f2 = (secondeq - collect(secondeq, y1d.diff(t),evaluate=False, exact=False)[y1d.diff(t)]*y1d.diff(t))/m
-f3 = (thirdeq - collect(thirdeq, y2d.diff(t),evaluate=False, exact=False)[y2d.diff(t)]*y2d.diff(t))/m
+f1 = -(firsteq - collect(firsteq, x1d.diff(t),evaluate=False, exact=False)[x1d.diff(t)]*x1d.diff(t))/m
+f2 = -(secondeq - collect(secondeq, y1d.diff(t),evaluate=False, exact=False)[y1d.diff(t)]*y1d.diff(t))/m
+f3 = -(thirdeq - collect(thirdeq, y2d.diff(t),evaluate=False, exact=False)[y2d.diff(t)]*y2d.diff(t))/m
 
 
 # hacky way of fixing sympy's execution fails
