@@ -34,7 +34,7 @@ def new_step(self):
 OdeSolver.__init__ = new_init
 OdeSolver.step = new_step
 
-
+#################################################################################################
 
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 from scipy.integrate import solve_ivp
@@ -49,89 +49,117 @@ PLOT = True
 
 # read in arguments and important variables
 parser = argparse.ArgumentParser()
+parser.add_argument("-mp", "--modelpath", help="specify the model path", type=str)
 parser.add_argument("-p", "--postpath", help="specify the post path", type=str)
 parser.add_argument("-i", "--imgpath", help="specify the image path", type=str)
-parser.add_argument("-a", "--ca", help="specify the configuration angle", type=float)
 parser.add_argument('--maintain', action=argparse.BooleanOptionalAction, help="whether to constrain hydrostatic pressure as constant or not")
 args = parser.parse_args()
 
+MODEL_PATH = args.modelpath
 POST_PATH = args.postpath
 IMG_PATH = args.imgpath
-THETA = args.ca
-MAINTAIN=args.maintain # If true, then we apply constraint
+MAINTAIN = args.maintain # If true, then we apply constraint
 
 PI = 3.141592654
-
 R = float(os.environ['R'])
-INT_TIME = float(os.environ['INT_TIME'])
-
-print('Loading Functions.')
-with open(POST_PATH+'f1.pkl', mode='rb') as file:
-   f1_lambda = cloudpickle.load(file)
-
-with open(POST_PATH+'f2.pkl', mode='rb') as file:
-   f2_lambda = cloudpickle.load(file)
-
-with open(POST_PATH+'f3.pkl', mode='rb') as file:
-   f3_lambda = cloudpickle.load(file)
-
-
-print('Loading holonomic constraint.')
-with open(POST_PATH+'hC.pkl', mode='rb') as file:
-   hC_lambda = cloudpickle.load(file)
-
-with open(POST_PATH+'hCdot.pkl', mode='rb') as file:
-   hCdot_lambda = cloudpickle.load(file)
-
-with open(POST_PATH+'hD.pkl', mode='rb') as file:
-   hD_lambda = cloudpickle.load(file)
-
-with open(POST_PATH+'hDdot.pkl', mode='rb') as file:
-   hDdot_lambda = cloudpickle.load(file)
-
-with open(POST_PATH+'hv.pkl', mode='rb') as file:
-   hv_lambda = cloudpickle.load(file)
-
-
-def hC_lambdaN(a,b,c):
-    g = hC_lambda(a,b,c)
-    g1, g2, g3 = g[0], g[1], g[2]
-    return np.array([g1, g2, g3]).reshape((1,3)).astype(np.float64)
-
-def hD_lambdaN(a,b,c):
-    g = hD_lambda(a,b,c)
-    g1, g2 = g[0], g[1]
-    g3, g4 = g[2], g[3]
-    g5, g6 = g[4], g[5]
-    return np.array([g1, g2, g3, g4, g5, g6]).reshape((3,2)).astype(np.float64)
-
-def hCdot_lambdaN(a,b,c,d,e,f):
-    g = hCdot_lambda(a,b,c,d,e,f)
-    g1, g2, g3 = g[0][0], g[1][0], g[2][0]
-    return np.array([g1, g2, g3]).reshape((1,3)).astype(np.float64)
-
-
-def hDdot_lambdaN(a,b,c,d,e,f):
-    g = hDdot_lambda(a,b,c,d,e,f)
-    g1, g2 = g[0], g[1]
-    g3, g4 = g[2], g[3]
-    g5, g6 = g[4], g[5]
-    return np.array([g1, g2, g3, g4, g5, g6]).reshape((3,2)).astype(np.float64)
-
-def hv_lambdaN(a,b,c):
-    g = hv_lambda(a,b,c)
-    return float(g)
 
 print('Loading Initial Conditions.')
 with open(POST_PATH+'init_dof.pkl', 'rb') as ff:
     init_dof = cloudpickle.load(ff)
 
-x10, y10, y20 = init_dof
+with open(POST_PATH+'init_offset.pkl', 'rb') as ff:
+    init_offset = cloudpickle.load(ff)
+
+x10, y10, y20 = init_dof # somehow find a way to update these
 xd0 = np.zeros((3,1))
 
+# Load relevant variables
+THETA = float(os.environ['CA'])
+LOAD = float(os.environ['LOAD'])
+LOAD_TIME = float(os.environ['LOAD_TIME'])
+P = float(os.environ['PRESSURE'])
+
+KS = float(os.environ['KS_START'])
+KS_RATE_RISE = float(os.environ['KS_RATE_RISE'])
+KS_TIME_RISE = float(os.environ['KS_TIME_RISE'])
+KS_RATE_DROP = float(os.environ['KS_RATE_DROP'])
+KS_TIME_DROP = float(os.environ['KS_TIME_DROP'])
+
+INT_TIME = LOAD_TIME + KS_TIME_RISE + KS_TIME_DROP
+
+
+print('Loading Functions.')
+with open(MODEL_PATH+'f1.pkl', mode='rb') as file:
+   f1_lambda = cloudpickle.load(file)
+
+with open(MODEL_PATH+'f2.pkl', mode='rb') as file:
+   f2_lambda = cloudpickle.load(file)
+
+with open(MODEL_PATH+'f3.pkl', mode='rb') as file:
+   f3_lambda = cloudpickle.load(file)
+
+
+print('Loading holonomic constraint.')
+with open(MODEL_PATH+'hC.pkl', mode='rb') as file:
+   hC_lambda = cloudpickle.load(file)
+
+with open(MODEL_PATH+'hCdot.pkl', mode='rb') as file:
+   hCdot_lambda = cloudpickle.load(file)
+
+with open(MODEL_PATH+'hD.pkl', mode='rb') as file:
+   hD_lambda = cloudpickle.load(file)
+
+with open(MODEL_PATH+'hDdot.pkl', mode='rb') as file:
+   hDdot_lambda = cloudpickle.load(file)
+
+with open(MODEL_PATH+'hv.pkl', mode='rb') as file:
+   hv_lambda = cloudpickle.load(file)
+
+with open(MODEL_PATH+'hvdot.pkl', mode='rb') as file:
+   hvdot_lambda = cloudpickle.load(file)
+
+
+def hC_lambdaN(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset):
+    g = hC_lambda(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    g1, g2, g3 = g[0], g[1], g[2]
+    return np.array([g1, g2, g3]).reshape((1,3)).astype(np.float64)
+
+def hCdot_lambdaN(t,a,b,c,d,e,f, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset):
+    g = hCdot_lambda(t,a,b,c,d,e,f, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    g1, g2, g3 = g[0], g[1], g[2]
+    return np.array([g1, g2, g3]).reshape((1,3)).astype(np.float64)
+
+
+def hD_lambdaN(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset):
+    g = hD_lambda(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    g1, g2 = g[0], g[1]
+    g3, g4 = g[2], g[3]
+    g5, g6 = g[4], g[5]
+    return np.array([g1, g2, g3, g4, g5, g6]).reshape((3,2)).astype(np.float64)
+
+
+def hDdot_lambdaN(t,a,b,c,d,e,f, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset):
+    g = hDdot_lambda(t,a,b,c,d,e,f, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    g1, g2 = g[0], g[1]
+    g3, g4 = g[2], g[3]
+    g5, g6 = g[4], g[5]
+    return np.array([g1, g2, g3, g4, g5, g6]).reshape((3,2)).astype(np.float64)
+
+def hv_lambdaN(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset):
+    g = hv_lambda(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    return float(g)
+
+def hvdot_lambdaN(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset):
+    g = hvdot_lambda(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    return float(g)
+
+
 if MAINTAIN:
-    u0 = np.linalg.inv(hD_lambdaN(*init_dof).T.dot(hD_lambdaN(*init_dof))).dot(hD_lambdaN(*init_dof).T).dot(
-                xd0 - hC_lambdaN(*init_dof).T*hv_lambdaN(*init_dof))
+    D0 = hD_lambdaN(0, x10, y10, y20, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    C0 = hC_lambdaN(0, x10, y10, y20, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    v0 = hC_lambdaN(0, x10, y10, y20, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+
+    u0 = np.linalg.inv(D0.T.dot(D0)).dot(D0.T).dot(xd0 - C0.T*v0)
 
     state_vector_0 = [x10, y10, y20, u0[0,0], u0[1,0]]
 else:
@@ -139,31 +167,34 @@ else:
 
 
 # Now perform solving of system (v is 0)
-def helperMAINTAIN(t, vars): # x1, y1, y2, u1, u2
+def helperMAINTAIN(t, vars, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset): # x1, y1, y2, u1, u2
     ## actual stuff
-    D = hD_lambdaN(vars[0], vars[1], vars[2])
+    C = hC_lambdaN(t, vars[0], vars[1], vars[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    D = hD_lambdaN(t, vars[0], vars[1], vars[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    v = hv_lambdaN(t, vars[0], vars[1], vars[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
     u = np.array([vars[3], vars[4]]).reshape((2,1)).astype(np.float64)
 
-    xdot = D.dot(u).flatten()
+    xdot = D.dot(u).flatten() + v*C.flatten()
 
-    f1 = f1_lambda(vars[0], vars[1], vars[2], xdot[0], xdot[1], xdot[2])
-    f2 = f2_lambda(vars[0], vars[1], vars[2], xdot[0], xdot[1], xdot[2])
-    f3 = f3_lambda(vars[0], vars[1], vars[2], xdot[0], xdot[1], xdot[2])
+    f1 = f1_lambda(t, vars[0], vars[1], vars[2], xdot[0], xdot[1], xdot[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    f2 = f2_lambda(t, vars[0], vars[1], vars[2], xdot[0], xdot[1], xdot[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    f3 = f3_lambda(t, vars[0], vars[1], vars[2], xdot[0], xdot[1], xdot[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
     f = np.array([f1, f2, f3]).reshape((3,1)).astype(np.float64)
 
-    Ddot = hDdot_lambdaN(vars[0], vars[1], vars[2], xdot[0], xdot[1], xdot[2])
+    Ddot = hDdot_lambdaN(t, vars[0], vars[1], vars[2], xdot[0], xdot[1], xdot[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    Cdot = hCdot_lambdaN(t, vars[0], vars[1], vars[2], xdot[0], xdot[1], xdot[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
 
-    udot = np.linalg.inv(D.T.dot(D)).dot(D.T).dot( f -  Ddot.dot(u)).flatten()
+    udot = np.linalg.inv(D.T.dot(D)).dot(D.T).dot( f -  Ddot.dot(u) - Cdot.T*v).flatten()
 
     return [xdot[0], xdot[1], xdot[2], udot[0], udot[1]]
 
-def helperNOMAINTAIN(t, vars): # x1, y1, y2, x1d, y1d, y2d
+def helperNOMAINTAIN(t, vars, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset): # x1, y1, y2, x1d, y1d, y2d
     x = [vars[0], vars[1], vars[2]]
     xdot = [vars[3], vars[4], vars[5]]
 
-    f1 = f1_lambda(x[0], x[1], x[2], xdot[0], xdot[1], xdot[2])
-    f2 = f2_lambda(x[0], x[1], x[2], xdot[0], xdot[1], xdot[2])
-    f3 = f3_lambda(x[0], x[1], x[2], xdot[0], xdot[1], xdot[2])
+    f1 = f1_lambda(t, x[0], x[1], x[2], xdot[0], xdot[1], xdot[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    f2 = f2_lambda(t, x[0], x[1], x[2], xdot[0], xdot[1], xdot[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+    f3 = f3_lambda(t, x[0], x[1], x[2], xdot[0], xdot[1], xdot[2], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
 
     return [xdot[0], xdot[1], xdot[2], f1, f2, f3]
 
@@ -171,17 +202,19 @@ def helperNOMAINTAIN(t, vars): # x1, y1, y2, x1d, y1d, y2d
 print('Integrating.')
 start = 0
 end = INT_TIME
-points = 100
+points = 500
 tspan = np.linspace(start, end, points)
 
 if MAINTAIN:
     sol = solve_ivp(helperMAINTAIN, [tspan[0], tspan[-1]],
                         state_vector_0,
-                        t_eval=tspan)
+                        t_eval=tspan,
+                        args=[LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset])
 else:
     sol = solve_ivp(helperNOMAINTAIN, [tspan[0], tspan[-1]],
                         state_vector_0,
-                        t_eval=tspan)
+                        t_eval=tspan,
+                        args=[LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset])
 
 
 
@@ -189,14 +222,18 @@ print('Saving Solution.')
 soln_x1, soln_y1, soln_y2  = np.zeros(len(sol.t)),  np.zeros(len(sol.t)),  np.zeros(len(sol.t))
 soln_vx1, soln_vy1, soln_vy2  = np.zeros(len(sol.t)),  np.zeros(len(sol.t)),  np.zeros(len(sol.t))
 
-for t in range(len(sol.t)):
+print('Positions:')
+for t in tqdm(range(len(sol.t))):
     soln_x1[t], soln_y1[t], soln_y2[t]  = sol.y[0][t], sol.y[1][t], sol.y[2][t]
 
+print('Velocities:')
 if MAINTAIN:
-    for t in range(len(sol.t)):
-        soln_vx1[t], soln_vy1[t], soln_vy2[t]  = hD_lambdaN(sol.y[0][t], sol.y[1][t], sol.y[2][t]).dot(np.array([sol.y[3][t], sol.y[4][t]]).reshape(2,1))
+    for t in tqdm(range(len(sol.t))):
+        D = hD_lambdaN(sol.t[t], soln_x1[t], soln_y1[t], soln_y2[t], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+        u = np.array([sol.y[3][t], sol.y[4][t]]).reshape(2,1)
+        soln_vx1[t], soln_vy1[t], soln_vy2[t]  = D.dot(u)
 else:
-    for t in range(len(sol.t)):
+    for t in tqdm(range(len(sol.t))):
         soln_vx1[t], soln_vy1[t], soln_vy2[t]  = sol.y[3][t], sol.y[4][t], sol.y[5][t]
 
 soln = [sol.t, soln_x1, soln_y1, soln_y2, soln_vx1, soln_vy1, soln_vy2]
