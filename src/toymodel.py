@@ -6,31 +6,22 @@ import os, sys
 
 # read in arguments and important variables
 parser = argparse.ArgumentParser()
-parser.add_argument("-p", "--postpath", help="specify the post path (output of stress rise)", type=str)
-parser.add_argument("-l", "--load", help="specify the load imposed on triplet", type=float)
-parser.add_argument("-a", "--ca", help="specify the configuration angle", type=float)
-parser.add_argument("-hp", "--pressure", help="specify the hydrostatic pressure", type=float)
+parser.add_argument("-mp", "--modelpath", help="specify the model path", type=str)
 args = parser.parse_args()
 
 PI = 3.141592654
 
-KN, KT, KS = float(os.environ['KN']), float(os.environ['KT']), float(os.environ['KS'])
+KN, KT = float(os.environ['KN']), float(os.environ['KT'])
 MU, R, M = float(os.environ['MU']), float(os.environ['R']), float(os.environ['M'])
-
-POST_PATH = args.postpath
-LOAD = args.load
-THETA = args.ca # in degrees!
-P = args.pressure
+THETA = float(os.environ['CA']) # in degrees!
 
 
-# load initial conditions [needed for ]
-with open(POST_PATH+'init_dof.pkl', 'rb') as ff:
-    init_dof = cloudpickle.load(ff)
+MODEL_PATH = args.modelpath
 
-with open(POST_PATH+'init_offset.pkl', 'rb') as ff:
-    init_offset = cloudpickle.load(ff)
 
-x10, y10, y20 = init_dof # somehow find a way to update these
+## Initial Conditions
+x10, y10, y20 = symbols('X10', real=True), symbols('Y10', real=True), symbols('Y20', real=True)
+init_offset = symbols('INIT_OFFSET', real=True)
 
 
 ## First establish coordinate system
@@ -55,18 +46,37 @@ y1d, y2d = dynamicsymbols('y1', 1, real=True), dynamicsymbols('y2', 1, real=True
 
 
 # material and geometric properties
-kn, kt, ks = Float(KN), Float(KT), Float(KS)
+kn, kt = Float(KN), Float(KT)
 R = Float(R)
 mu = Float(MU)
 m = Float(M)
 THETA = Float(THETA*PI/180.)
-
 t = symbols('t')
+
+# Pressure
+P = symbols('P', real=True)
+
+
+# load ramp
+LOAD = symbols('LOAD', real=True)
+LOAD_TIME = symbols('LOAD_TIME', real=True)
+LOAD_RATE = LOAD/LOAD_TIME
+load = Piecewise(( LOAD_RATE*t+1.0, t<LOAD_TIME),
+                 ( LOAD, True))
+
+# ks function (should only start changing after ramp finishes)
+KS = symbols('KS_START', real=True)
+KS_RATE_RISE, KS_TIME_RISE = symbols('KS_RATE_RISE', real=True), symbols('KS_TIME_RISE', real=True)
+KS_RATE_DROP = symbols('KS_RATE_DROP', real=True)
+
+ks = Piecewise((KS, t < LOAD_TIME),
+               (KS+KS_RATE_RISE*t, t < (LOAD_TIME+KS_TIME_RISE) ),
+               (KS+KS_RATE_RISE*KS_TIME_RISE+KS_RATE_DROP*t, True) )
 
 
 # loads imposed
 F1x, F1y = Float(0.0), Float(0.0)
-F2x, F2y = Float(0.0), Float(-1*LOAD)
+F2x, F2y = Float(0.0), -1*load
 F1 = Matrix([F1x, F1y])
 F2 = Matrix([F2x, F2y])
 
@@ -109,7 +119,7 @@ print('Finding monogenic expressions.')
 # return spring stiffness accordingly
 def getK(k, cond):
     return Piecewise((k, cond >= 0),
-                     (0.00001, True), evaluate=False)
+                     (1.0, True), evaluate=False)
 
 kn1 = getK(kn, 2*R - d1.norm())
 kn2 = getK(kn, 2*R - d2.norm())
@@ -121,9 +131,12 @@ ks1 = getK(ks, x1-x10 + init_offset)
 fn1 = kn1*deltan1
 fn2 = kn2*deltan2
 
-# tangential forces
-slidecheck1 = kt1*sqrt(deltat1.dot(deltat1)) - mu*sqrt(fn1.dot(fn1))
-slidecheck2 = kt2*sqrt(deltat2.dot(deltat2)) - mu*sqrt(fn2.dot(fn2))
+# tangential forces [AVOID SQRT IN CONDITIONS!!!]
+# if a-b>=0, and a>=0 and b>=0, then this is equivalent to a**2 -b**2 >= 0
+# slidecheck1 = kt1*sqrt(deltat1.dot(deltat1)) - mu*sqrt(fn1.dot(fn1))
+# slidecheck2 = kt2*sqrt(deltat2.dot(deltat2)) - mu*sqrt(fn2.dot(fn2))
+slidecheck1 = (kt1**2)*(deltat1.dot(deltat1)) - (mu**2)*(fn1.dot(fn1))
+slidecheck2 = (kt2**2)*(deltat2.dot(deltat2)) - (mu**2)*(fn2.dot(fn2))
 
 sign1 = Piecewise((1, deltat1.dot(t1hat) >= 0),
                   (-1, True))
@@ -131,8 +144,8 @@ sign1 = Piecewise((1, deltat1.dot(t1hat) >= 0),
 sign2 = Piecewise((1, deltat2.dot(t2hat) >= 0),
                   (-1, True))
 
-ft1 = Heaviside(-slidecheck1)*kt*deltat1 + sign1*Heaviside(slidecheck1)*mu*sqrt(fn1.dot(fn1))*t1hat
-ft2 = Heaviside(-slidecheck2)*kt*deltat2 + sign2*Heaviside(slidecheck2)*mu*sqrt(fn2.dot(fn2))*t2hat
+ft1 = Heaviside(-slidecheck1)*kt1*deltat1 + sign1*Heaviside(slidecheck1)*mu*sqrt(fn1.dot(fn1))*t1hat
+ft2 = Heaviside(-slidecheck2)*kt2*deltat2 + sign2*Heaviside(slidecheck2)*mu*sqrt(fn2.dot(fn2))*t2hat
 
 
 # lateral forces
@@ -172,12 +185,13 @@ U = Un + Ut + Us
 print('Finding system of equations.')
 L = T - U
 
-
 def lagrangian(dofs):
     assert len(dofs)==2, 'Order must be q and qdot'
     q, qdot = dofs[0], dofs[1]
 
     return L.diff(qdot).diff(t) - L.diff(q) - Qext(q)
+
+
 
 ## Obtain system of 4 nonlinear, second-order ODEs
 # Actual equations that equal 0
@@ -196,7 +210,7 @@ cf1 = -(fn1+ft1)
 cf2 = fn2+ft2
 cfs = -fs
 
-g = (Float(P) + (P2x1.dot(cf1) + P2x2.dot(cf2) + P2xs.dot(cfs))/(2*PI*R*R))/m
+g = (P + (P2x1.dot(cf1) + P2x2.dot(cf2) + P2xs.dot(cfs))/(2*PI*R*R))/m
 
 # C
 C1 = g.diff(x1)
@@ -205,9 +219,10 @@ C3 = g.diff(y2)
 
 noddyC = Matrix([C1, C2, C3])
 noddyv = -1*(noddyC.dot(noddyC)**-1)*g.diff(t)
-noddyv = noddyv.subs(x1d, 0).subs(y1d, 0).subs(y2d, 0) # this ensure that it's a partial derivative wrt time
+noddyv = noddyv.subs(x1d, 0).subs(y1d, 0).subs(y2d, 0) # this ensures that it's a partial derivative wrt time
+noddyvdot = noddyv.diff(t)
 
-# we need C dot to compute D dot.
+# we need C dot
 noddyCdot = Matrix([C1.diff(t), C2.diff(t), C3.diff(t)])
 
 # we will find D and D dot as well.
@@ -233,6 +248,7 @@ def fixMe(f):
     return returned
 
 
+
 f1 = fixMe(f1)
 f2 = fixMe(f2)
 f3 = fixMe(f3)
@@ -244,86 +260,89 @@ noddyCdot = fixMe(noddyCdot)
 noddyD = fixMe(noddyD)
 noddyDdot = fixMe(noddyDdot)
 noddyv = fixMe(noddyv)
-
+noddyvdot = fixMe(noddyvdot)
 
 
 ## lambdify f accordingly
 print('Lambdify f1.')
-f1_lambda = lambdify((x1, y1, y2, x1d, y1d, y2d), f1, modules=['sympy'])
-with open(POST_PATH+'f1.pkl', mode='wb') as file:
+f1_lambda = lambdify((t, x1, y1, y2, x1d, y1d, y2d, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), f1, modules=['sympy'])
+with open(MODEL_PATH+'f1.pkl', mode='wb') as file:
    cloudpickle.dump(f1_lambda, file)
 
 print('Lambdify f2.')
-f2_lambda = lambdify((x1, y1, y2, x1d, y1d, y2d), f2, modules=['sympy'])
-with open(POST_PATH+'f2.pkl', mode='wb') as file:
+f2_lambda = lambdify((t, x1, y1, y2, x1d, y1d, y2d, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), f2, modules=['sympy'])
+with open(MODEL_PATH+'f2.pkl', mode='wb') as file:
    cloudpickle.dump(f2_lambda, file)
 
 print('Lambdify f3.')
-f3_lambda = lambdify((x1, y1, y2, x1d, y1d, y2d), f3, modules=['sympy'])
-with open(POST_PATH+'f3.pkl', mode='wb') as file:
+f3_lambda = lambdify((t, x1, y1, y2, x1d, y1d, y2d, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), f3, modules=['sympy'])
+with open(MODEL_PATH+'f3.pkl', mode='wb') as file:
    cloudpickle.dump(f3_lambda, file)
 
 ## lambdify PE accordingly
 print('Lambdify U.')
-U_lambda = lambdify((x1, y1, y2), U, modules=['sympy'])
-with open(POST_PATH+'UTotal.pkl', mode='wb') as file:
+U_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), U, modules=['sympy'])
+with open(MODEL_PATH+'UTotal.pkl', mode='wb') as file:
    cloudpickle.dump(U_lambda, file)
 
 
 print('Lambdify Us.')
-Us_lambda = lambdify((x1, y1, y2), Us, modules=['sympy'])
-with open(POST_PATH+'Us.pkl', mode='wb') as file:
+Us_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), Us, modules=['sympy'])
+with open(MODEL_PATH+'Us.pkl', mode='wb') as file:
    cloudpickle.dump(Us_lambda, file)
 
 
 print('Lambdify UTan.')
-Ut_lambda = lambdify((x1, y1, y2), Ut, modules=['sympy'])
-with open(POST_PATH+'Ut.pkl', mode='wb') as file:
+Ut_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), Ut, modules=['sympy'])
+with open(MODEL_PATH+'Ut.pkl', mode='wb') as file:
    cloudpickle.dump(Ut_lambda, file)
 
 ## lambdify contact forces on second particle
 print('Lambdify force at contact 1.')
-cf1_lambda = lambdify((x1, y1, y2), cf1, modules=['sympy'])
-with open(POST_PATH+'cf1.pkl', mode='wb') as file:
+cf1_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), cf1, modules=['sympy'])
+with open(MODEL_PATH+'cf1.pkl', mode='wb') as file:
    cloudpickle.dump(cf1_lambda, file)
 
 print('Lambdify force at contact 2.')
-cf2_lambda = lambdify((x1, y1, y2), cf2, modules=['sympy'])
-with open(POST_PATH+'cf2.pkl', mode='wb') as file:
+cf2_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), cf2, modules=['sympy'])
+with open(MODEL_PATH+'cf2.pkl', mode='wb') as file:
    cloudpickle.dump(cf2_lambda, file)
 
 print('Lambdify lateral force.')
-cfs_lambda = lambdify((x1, y1, y2), cfs, modules=['sympy'])
-with open(POST_PATH+'cfs.pkl', mode='wb') as file:
+cfs_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), cfs, modules=['sympy'])
+with open(MODEL_PATH+'cfs.pkl', mode='wb') as file:
    cloudpickle.dump(cfs_lambda, file)
 
 ## lambdify constraint stuff
 print('Lambdify holonomic C.')
-noddyC_lambda = lambdify((x1, y1, y2), noddyC, modules=['sympy'])
-with open(POST_PATH+'hC.pkl', mode='wb') as file:
+noddyC_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), noddyC, modules=['sympy'])
+with open(MODEL_PATH+'hC.pkl', mode='wb') as file:
    cloudpickle.dump(noddyC_lambda, file)
 
 print('Lambdify holonomic C dot.')
-noddyCdot_lambda = lambdify((x1, y1, y2, x1d, y1d, y2d), noddyCdot, modules=['sympy'])
-with open(POST_PATH+'hCdot.pkl', mode='wb') as file:
+noddyCdot_lambda = lambdify((t, x1, y1, y2, x1d, y1d, y2d, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), noddyCdot, modules=['sympy'])
+with open(MODEL_PATH+'hCdot.pkl', mode='wb') as file:
    cloudpickle.dump(noddyCdot_lambda, file)
 
 print('Lambdify holonomic D.')
-noddyD_lambda = lambdify((x1, y1, y2), noddyD, modules=['sympy'])
-with open(POST_PATH+'hD.pkl', mode='wb') as file:
+noddyD_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), noddyD, modules=['sympy'])
+with open(MODEL_PATH+'hD.pkl', mode='wb') as file:
    cloudpickle.dump(noddyD_lambda, file)
 
 print('Lambdify holonomic D dot.')
-noddyDdot_lambda = lambdify((x1, y1, y2, x1d, y1d, y2d), noddyDdot, modules=['sympy'])
-with open(POST_PATH+'hDdot.pkl', mode='wb') as file:
+noddyDdot_lambda = lambdify((t, x1, y1, y2, x1d, y1d, y2d, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), noddyDdot, modules=['sympy'])
+with open(MODEL_PATH+'hDdot.pkl', mode='wb') as file:
    cloudpickle.dump(noddyDdot_lambda, file)
 
 print('Lambdify holonomic v.')
-noddyv_lambda = lambdify((x1, y1, y2), noddyv, modules=['sympy'])
-with open(POST_PATH+'hv.pkl', mode='wb') as file:
+noddyv_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), noddyv, modules=['sympy'])
+with open(MODEL_PATH+'hv.pkl', mode='wb') as file:
    cloudpickle.dump(noddyv_lambda, file)
 
-
+print('Lambdify holonomic v dot.')
+noddyvdot_lambda = lambdify((t, x1, y1, y2, x1d, y1d, y2d, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), noddyvdot, modules=['sympy'])
+with open(MODEL_PATH+'hvdot.pkl', mode='wb') as file:
+   cloudpickle.dump(noddyvdot_lambda, file)
 
 
 #
