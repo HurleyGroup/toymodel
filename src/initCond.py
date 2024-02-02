@@ -6,20 +6,21 @@ import argparse
 import os
 
 
+print('Solving for Initial Conditions.')
+
 # read in arguments and important variables
 parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--postpath", help="specify the post path (output of stress rise)", type=str)
-parser.add_argument("-a", "--ca", help="specify the configuration angle", type=float)
-parser.add_argument("-hp", "--pressure", help="specify the hydrostatic pressure", type=float)
 args = parser.parse_args()
 
 # given these configurations, we need to get particle positions we have right pressure.
 KN = float(os.environ['KN'])
-KS = float(os.environ['KS'])
+KS = float(os.environ['KS_START'])
 R = float(os.environ['R'])
+THETA = float(os.environ['CA']) # in degrees!
+
 POST_PATH = args.postpath
-THETA = args.ca # in degrees!
-P = args.pressure
+P = float(os.environ['PRESSURE'])
 PI = 3.141592654
 
 R = Float(R)
@@ -63,30 +64,26 @@ xfs = R*e1
 
 
 # assemble constraint function
-f = lambdify(dn, P + (xf1.dot(fn1) + xf2.dot(fn2) + xfs.dot(fns))/(2*PI*R*R))
+f = lambdify(dn, (P + 0.5*(xf1.dot(fn1) + xf2.dot(fn2) + xfs.dot(fns))/(PI*R*R))**2)
+
+
+
 
 ## Now find dn for which the hydrostatic constraint will be met
 init_dn = optimize.root(f, 1E-4).x[0]
-
 
 # Finally, find initial conditions!
 x10, y10, y20 = x1.subs(dn, init_dn), y1.subs(dn, init_dn), y2.subs(dn, init_dn)
 init_dof = [x10, y10, y20]
 init_offset = (-fns[0]/KS).subs(dn, init_dn)
 
-# fn1 = fn1.subs(dn, init_dn)
-# fn2 = fn2.subs(dn, init_dn)
-# fns = fns.subs(dn, init_dn)
-# xf1 = xf1.subs(dn, init_dn)
-# xf2 = xf2.subs(dn, init_dn)
-# xfs = xfs.subs(dn, init_dn)
-#
-# stress = (np.outer(xf1,fn1) + np.outer(xf2,fn2) + np.outer(xfs,fns))/(2*PI*R*R)
-#
-# print(np.dot(stress,[0,1])*2*R)
-# print(init_offset)
-#
-# sys.exit()
+fn1 = fn1.subs(dn, init_dn)
+fn2 = fn2.subs(dn, init_dn)
+fns = fns.subs(dn, init_dn)
+xf1 = xf1.subs(dn, init_dn)
+xf2 = xf2.subs(dn, init_dn)
+xfs = xfs.subs(dn, init_dn)
+
 
 with open(POST_PATH+'init_dof.pkl', 'wb') as ff:
     cloudpickle.dump(init_dof, ff)
