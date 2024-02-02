@@ -5,19 +5,28 @@ export MU=0.1
 export R=0.05
 export KN=400000
 export KT=200000
-export PRESSURE=350
-export KS=1000
+export PRESSURE=4550
 export M=40
 
+# ks function (should only start changing after ramp finishes)
+export KS_START=2000
+export KS_RATE_RISE=-400
+export KS_TIME_RISE=0.05
+export KS_TIME_DROP=0.04
+export KS_RATE_DROP=16
+
+# load ramp
+export LOAD=0
+export LOAD_TIME=.01 # ramp time
+
 # Loading conditions
-export CA=25
-export LOAD=100
-export INT_TIME=0.04
+export CA=23
 
 # execution flags
 export CLEAN=false
 
 # Paths of interest
+export MODEL_PATH_BASE="/code/model/"
 export POST_PATH_BASE="/code/post"
 export IMG_PATH_BASE="/code/images"
 
@@ -30,43 +39,38 @@ echo "(Load = $LOAD, Configuration Angle = $CA) [PRESSURE = ${PRESSURE}]"
 
 # clear if it exists, and make new folder in its place
 if [ "$CLEAN" = true ]; then
+  echo "Cleaning Files."
   rm -rf $POST_PATH_BASE
   rm -rf $IMG_PATH_BASE
+  rm -rf $MODEL_PATH_BASE
   mkdir -p $POST_PATH_BASE
   mkdir -p $IMG_PATH_BASE
-
-  rm -rf $STRESS_PATH
-  rm -rf $STRESS_IMG
-  mkdir -p $STRESS_PATH
-  mkdir -p $STRESS_IMG
-
+  mkdir -p $MODEL_PATH_BASE
 fi
 
-# first solve for initial conditions
-python -u /code/src/initCond.py -p $STRESS_PATH -a $CA -hp $PRESSURE
+rm -rf $STRESS_PATH
+rm -rf $STRESS_IMG
+mkdir -p $STRESS_PATH
+mkdir -p $STRESS_IMG
+
 
 # generate model
-python -u /code/src/toymodel.py -p $STRESS_PATH -l $LOAD -a $CA -hp $PRESSURE
+# python -u /code/src/toymodel.py -mp $MODEL_PATH_BASE
+
+# solve for initial conditions
+python -u /code/src/initCond.py -p $STRESS_PATH
 
 # run unconstrained case
-python -u /code/src/odesolve.py -p $STRESS_PATH -i $STRESS_IMG -a $CA
+python -u /code/src/odesolve.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG
 
 # run constrained case
-python -u /code/src/odesolve.py -p $STRESS_PATH -i $STRESS_IMG -a $CA --maintain
-
-exit 0
+python -u /code/src/odesolve.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG --maintain
 
 
-#integrate the ODE and save solution; if it fails, creates a fail file
-if python -u /code/src/odesolve.py -p $STRESS_RISE_PATH -a $CA  --maintain; then
-    :
-else
-    echo "WARNING: Integration failed! Lower integration time?"
-    echo "$INT_TIME_RISE" > $STRESS_RISE_PATH/fail.txt
-fi
+# post process unconstrained case
+python -u /code/src/postprocess.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG
 
-
-# run post processing on the stress rise
-python -u /code/src/postprocessRISE.py  -p $STRESS_RISE_PATH -i $STRESS_RISE_IMG -a $CA
+# post process constrained case
+python -u /code/src/postprocess.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG --maintain
 
 exit 0
