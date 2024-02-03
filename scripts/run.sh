@@ -11,19 +11,20 @@ export M=40
 # ks function (should only start changing after ramp finishes)
 export KS_START=2000
 export KS_RATE_RISE=-400
-export KS_TIME_RISE=0.05
-export KS_TIME_DROP=0.04
+export KS_TIME_RISE=0.02
+export KS_TIME_DROP=0.02
 export KS_RATE_DROP=16
 
 # load ramp
 export LOAD=0
-export LOAD_TIME=.01 # ramp time
+export LOAD_TIME=0.0000001 # ramp time
 
 # Loading conditions
 export CA=23
 
 # execution flags
 export CLEAN=false
+export DEBUG=false
 
 # Paths of interest
 export MODEL_PATH_BASE="/code/model/"
@@ -48,11 +49,12 @@ if [ "$CLEAN" = true ]; then
   mkdir -p $MODEL_PATH_BASE
 fi
 
-rm -rf $STRESS_PATH
-rm -rf $STRESS_IMG
-mkdir -p $STRESS_PATH
-mkdir -p $STRESS_IMG
-
+if [ "$DEBUG" = false ]; then
+  rm -rf $STRESS_PATH
+  rm -rf $STRESS_IMG
+  mkdir -p $STRESS_PATH
+  mkdir -p $STRESS_IMG
+fi
 
 # generate model
 # python -u /code/src/toymodel.py -mp $MODEL_PATH_BASE
@@ -61,14 +63,14 @@ mkdir -p $STRESS_IMG
 python -u /code/src/initCond.py -p $STRESS_PATH
 
 # run unconstrained case
-python -u /code/src/odesolve.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG
+# python -u /code/src/odesolve.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG
 
 # run constrained case
 python -u /code/src/odesolve.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG --maintain
 
 
 # post process unconstrained case
-python -u /code/src/postprocess.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG
+# python -u /code/src/postprocess.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG
 
 # post process constrained case
 python -u /code/src/postprocess.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG --maintain
