@@ -1,6 +1,4 @@
 from matplotlib.animation import FuncAnimation, FFMpegWriter
-from scipy.interpolate import interp1d
-from scipy.optimize import fsolve
 from matplotlib import pyplot as plt
 import numpy as np
 import cloudpickle
@@ -157,7 +155,7 @@ def compute_stress(fc1, fc2, fc3, x1, y1, y2):
     returned = np.zeros([NUM_STEPS, 2, 2])
 
     for t in range(NUM_STEPS):
-        theta = (PI/2 - np.arctan2(y1[t], x1[t]))*180./PI
+        theta = (PI/2 - np.arctan2(y1[t], x1[t]))
         c1 = [-R*np.sin(theta), -R*np.cos(theta)]
         c2 = [R, 0]
         c3 = [-R*np.sin(theta), R*np.cos(theta)]
@@ -181,20 +179,24 @@ times, soln_x1, soln_y1, soln_y2, soln_vx1, soln_vy1, soln_vy2  = soln
 NUM_STEPS = len(times)
 
 # create animation of particles buckling/fluttering
-save_animation([soln_x1, soln_y1, soln_y2])
+print('Creating animation.')
+# save_animation([soln_x1, soln_y1, soln_y2])
 
+print('Computing U.')
 UTotal, Us, Ut = compute_pe(UTotal_lambda, Us_lambda, Ut_lambda,
                             times, soln_x1, soln_y1, soln_y2)
 
+print('Computing Contact Forces.')
 cf1, cf2, cfs =  compute_force(cf1_lambda, cf2_lambda, cfs_lambda,
                             times, soln_x1, soln_y1, soln_y2)
 
+print('Computing Stresses.')
 stresses = compute_stress(cf1, cfs, cf2, soln_x1, soln_y1, soln_y2)
 
-oriented_stresses = rotate_stress(stresses, 9)
-
+oriented_stresses = rotate_stress(stresses, 15)
 
 # plot stresses over time
+print('Generating Plots.')
 plt.figure()
 plt.plot(times, 0.5*(oriented_stresses[:,0,0]+oriented_stresses[:,1,1]))
 if MAINTAIN:
@@ -231,8 +233,8 @@ ax1.set_xlabel('Time')
 ax1.set_ylabel('Potential Energy Change (per contact)')
 ax1.legend()
 
-ax2.plot(times, -1*oriented_stresses[:,1,1]+oriented_stresses[0,1,1], label=r"$\sigma_{yy}$", color='green')
-ax2.plot(times, -1*oriented_stresses[:,0,0]+oriented_stresses[0,0,0], label=r"$\sigma_{xx}$", color='red')
+ax2.plot(times, oriented_stresses[:,1,1]-oriented_stresses[0,1,1], label=r"$\sigma_{yy}$", color='green')
+ax2.plot(times, oriented_stresses[:,0,0]-oriented_stresses[0,0,0], label=r"$\sigma_{xx}$", color='red')
 ax2.plot(times, oriented_stresses[:,0,1]-oriented_stresses[0,0,1], label=r"$\sigma_{xy}$", color='blue')
 ax2.legend()
 
