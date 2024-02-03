@@ -209,6 +209,8 @@ if MAINTAIN:
     sol = solve_ivp(helperMAINTAIN, [tspan[0], tspan[-1]],
                         state_vector_0,
                         t_eval=tspan,
+                        method='LSODA',
+                        jac=None,
                         args=[LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset])
 else:
     sol = solve_ivp(helperNOMAINTAIN, [tspan[0], tspan[-1]],
@@ -230,8 +232,11 @@ print('Velocities:')
 if MAINTAIN:
     for t in tqdm(range(len(sol.t))):
         D = hD_lambdaN(sol.t[t], soln_x1[t], soln_y1[t], soln_y2[t], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+        C = hC_lambdaN(sol.t[t], soln_x1[t], soln_y1[t], soln_y2[t], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
+        v = hv_lambdaN(sol.t[t], soln_x1[t], soln_y1[t], soln_y2[t], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
         u = np.array([sol.y[3][t], sol.y[4][t]]).reshape(2,1)
-        soln_vx1[t], soln_vy1[t], soln_vy2[t]  = D.dot(u)
+
+        soln_vx1[t], soln_vy1[t], soln_vy2[t]  = D.dot(u) + v*C.T
 else:
     for t in tqdm(range(len(sol.t))):
         soln_vx1[t], soln_vy1[t], soln_vy2[t]  = sol.y[3][t], sol.y[4][t], sol.y[5][t]
