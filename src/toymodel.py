@@ -193,11 +193,12 @@ def lagrangian(dofs):
 
 
 
-## Obtain system of 4 nonlinear, second-order ODEs
+## Obtain system of 3 nonlinear, second-order ODEs
 # Actual equations that equal 0
 firsteq = lagrangian([x1, x1d])
 secondeq = lagrangian([y1, y1d])
 thirdeq = lagrangian([y2, y2d])
+
 
 
 print('Finding holonomic constraint.')
@@ -237,6 +238,8 @@ print('Finding fns.')
 f1 = -(firsteq - collect(firsteq, x1d.diff(t),evaluate=False, exact=False)[x1d.diff(t)]*x1d.diff(t))/m
 f2 = -(secondeq - collect(secondeq, y1d.diff(t),evaluate=False, exact=False)[y1d.diff(t)]*y1d.diff(t))/m
 f3 = -(thirdeq - collect(thirdeq, y2d.diff(t),evaluate=False, exact=False)[y2d.diff(t)]*y2d.diff(t))/m
+
+
 
 
 # hacky way of fixing sympy's execution fails
