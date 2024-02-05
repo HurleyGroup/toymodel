@@ -105,9 +105,9 @@ def save_animation(positions):
 
     # Save the animation as an MP4 file
     if MAINTAIN:
-        ani.save('/code/anim_MAINTAIN.mp4', writer=writer)
+        ani.save(IMG_PATH+'/anim_MAINTAIN.mp4', writer=writer)
     else:
-        ani.save('/code/anim_NOMAINTAIN.mp4', writer=writer)
+        ani.save(IMG_PATH+'/anim_NOMAINTAIN.mp4', writer=writer)
 
     # Close the figure to release resources
     plt.close(fig)
@@ -121,7 +121,7 @@ def compute_pe(funcT, funcS, funcTan, times, x1, y1, y2):
         Ut[t] = funcT(times[t], x1[t], y1[t], y2[t], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
         Us[t] = funcS(times[t], x1[t], y1[t], y2[t], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
         Utan[t] = funcTan(times[t], x1[t], y1[t], y2[t], LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
-    return Ut-Ut[0], Us-Us[0], Utan-Utan[0]
+    return Ut, Us, Utan
 
 # compute forces
 def compute_force(funcCF1, funcCF2, funcCS, times, x1, y1, y2):
@@ -174,44 +174,172 @@ def rotate_stress(stresses, ALPHA):
 
     return oriented_stresses
 
+def herons(s1, s2, s3):
+    semi = (s1 + s2 + s3)/2.
+    return np.sqrt(semi*(semi-s1)*(semi-s2)*(semi-s3))
+
+def distance(point1, point2):
+    # Calculate the Euclidean distance between two points
+    return np.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
+
+def get_normals(x1, x2, x3, ccw):
+    # x1, x2, x3 = points of the triangle
+    # ccw can be either 1 or -1 to ensure the right normal is obtained (outwards pointing) [ccw means we HAVE to make it ccw]
+    # returned is just the returned value (3x2 array -> 3 'a' vectors)
+    returned = np.zeros((3,2))
+
+    returned[0,:] = (1-2*ccw)*(x3-x2)
+    returned[1,:] = (1-2*ccw)*(x1-x3)
+    returned[2,:] = (1-2*ccw)*(x2-x1)
+
+    # pointing outwards, normal (opposite reciprocal)
+    returned[0,0], returned[0,1] = returned[0,1], -returned[0,0]
+    returned[1,0], returned[1,1] = returned[1,1], -returned[1,0]
+    returned[2,0], returned[2,1] = returned[2,1], -returned[2,0]
+
+    # normalize vector in the correct direction
+    returned[0,:] /= np.linalg.norm(returned[0,:])
+    returned[1,:] /= np.linalg.norm(returned[1,:])
+    returned[2,:] /= np.linalg.norm(returned[2,:])
+
+    # compute b, by making its magnitue the length of 'face'
+    returned[0,:] *= np.linalg.norm(x3-x2)
+    returned[1,:] *= np.linalg.norm(x1-x3)
+    returned[2,:] *= np.linalg.norm(x2-x1)
+
+    # compute a, since a = -b/D, where D = 2 for 2D case
+    returned[0,:] *= -0.5
+    returned[1,:] *= -0.5
+    returned[2,:] *= -0.5
+
+    return returned # returns the three a vectors
+
+
 # obtain particle positions and velocities
 times, soln_x1, soln_y1, soln_y2, soln_vx1, soln_vy1, soln_vy2  = soln
 NUM_STEPS = len(times)
 
-# create animation of particles buckling/fluttering
-print('Creating animation.')
-# save_animation([soln_x1, soln_y1, soln_y2])
 
-print('Computing U.')
-UTotal, Us, Ut = compute_pe(UTotal_lambda, Us_lambda, Ut_lambda,
-                            times, soln_x1, soln_y1, soln_y2)
 
 print('Computing Contact Forces.')
 cf1, cf2, cfs =  compute_force(cf1_lambda, cf2_lambda, cfs_lambda,
                             times, soln_x1, soln_y1, soln_y2)
 
+
+print('Computing Strains.')
+# bottom particle, middle particle, top particle
+xs = np.vstack([np.zeros(len(soln_x1)), np.zeros(len(soln_y1)), soln_x1, soln_y1, np.zeros(len(soln_y2)), soln_y2]).T
+
+# need to use triangles
+cp1 = np.zeros((len(xs), 2))
+cp2 = np.zeros((len(xs), 2))
+cps = np.zeros((len(xs), 2))
+areas = np.zeros(len(xs))
+
+for p in range(len(cp1)):
+    dc1 = xs[p,0:2]-xs[p,2:4]
+    dc2 = xs[p,4:6]-xs[p,2:4]
+
+    dist1 = np.linalg.norm(xs[p,2:4]-xs[p,0:2])
+    dist2 = np.linalg.norm(xs[p,2:4]-xs[p,4:6])
+
+    dc1 /= dist1
+    dc2 /= dist2
+
+    cp1[p] = 0.5*dist1*dc1+xs[p,2:4]
+    cp2[p] = 0.5*dist2*dc2+xs[p,2:4]
+    cps[p] = np.array([R, 0.])+xs[p,2:4]
+
+    areas[p] = herons(distance(cp1[p], cp2[p]), distance(cp1[p], cps[p]), distance(cp2[p], cps[p]))
+
+
+xs = np.hstack([cp1, cps, cp2])
+us = np.diff(xs, axis=0)
+
+d1s = xs[:,2:4]-xs[:,0:2]  # compute distances between point 2 and 1
+d2s = xs[:,4:6]-xs[:,0:2]  # """ between point 3 and 1
+d3s = xs[:,2:4]-xs[:,4:6]  # """ between point 2 and 3
+
+ccw_flags = np.cross(d1s, d2s)<0 # used to get the correct normal when computing strain using complementary area vector
+
+# compute area of triangle
+u_avgs = (us[:,0:2]+us[:,2:4]+us[:,4:6])/3. # average displacement (u_0)
+
+# compute a vectors
+avecs = np.zeros((len(xs),3,2))
+for t in range(len(avecs)):
+    avecs[t] = get_normals(xs[t, 0:2], xs[t, 2:4], xs[t, 4:6], ccw_flags[t])
+
+total_strain = np.zeros((len(us),2,2))
+for t in range(len(total_strain)):
+    for q in range(3):
+        qqa, qqb = int(q*2), int((q+1)*2)
+        total_strain[t] += np.outer(us[t, qqa:qqb]-u_avgs[t], avecs[t, q])
+
+    total_strain[t] = total_strain[t]/areas[t]
+    total_strain[t] = (total_strain[t]+total_strain[t].T)/2. # symmetric part of deformation gradient is strain
+
+total_strain = np.cumsum(total_strain, axis=0)
+oriented_strains = rotate_stress(total_strain, 15)
+
+
+# create animation of particles buckling/fluttering
+print('Creating animation.')
+save_animation([soln_x1, soln_y1, soln_y2])
+
+print('Computing U.')
+UTotal, Us, Ut = compute_pe(UTotal_lambda, Us_lambda, Ut_lambda,
+                            times, soln_x1, soln_y1, soln_y2)
+
+
+
 print('Computing Stresses.')
 stresses = compute_stress(cf1, cfs, cf2, soln_x1, soln_y1, soln_y2)
-
 oriented_stresses = rotate_stress(stresses, 15)
 
-# plot stresses over time
+
 print('Generating Plots.')
+# plot hydrostatic stress over time
 plt.figure()
 plt.plot(times, 0.5*(oriented_stresses[:,0,0]+oriented_stresses[:,1,1]))
+plt.ylim(-5000,0)
 if MAINTAIN:
-    plt.savefig(IMG_PATH+'testH_MAINTAIN.png')
+    plt.savefig(IMG_PATH+'H_MAINTAIN.png')
 else:
-    plt.savefig(IMG_PATH+'testH_NOMAINTAIN.png')
+    plt.savefig(IMG_PATH+'H_NOMAINTAIN.png')
 
+# plot changes in stress energy components over time
 plt.figure()
-plt.plot(times, oriented_stresses[:,0,0])
-plt.plot(times, oriented_stresses[:,1,1])
-plt.plot(times, oriented_stresses[:,0,1]+oriented_stresses[:,1,0])
+plt.plot(times[:-1], areas[:-1]*oriented_stresses[:-1,0,0]*oriented_strains[:,0,0] - areas[0]*oriented_stresses[0,0,0]*oriented_strains[0,0,0]  )
+plt.plot(times[:-1], areas[:-1]*oriented_stresses[:-1,1,1]*oriented_strains[:,1,1] - areas[0]*oriented_stresses[0,1,1]*oriented_strains[0,1,1])
+plt.plot(times[:-1], areas[:-1]*oriented_stresses[:-1,0,1]*oriented_strains[:,0,1]+areas[:-1]*oriented_stresses[:-1,1,0]*oriented_strains[:,1,0] - areas[0]*( oriented_stresses[0,0,1]*oriented_strains[0,0,1]+oriented_stresses[0,1,0]*oriented_strains[0,1,0] ) )
 if MAINTAIN:
-    plt.savefig(IMG_PATH+'testStress_MAINTAIN.png')
+    plt.savefig(IMG_PATH+'StressEnergy_MAINTAIN.png')
 else:
-    plt.savefig(IMG_PATH+'testStress_NOMAINTAIN.png')
+    plt.savefig(IMG_PATH+'StressEnergy_NOMAINTAIN.png')
+
+# plot stress components over time
+plt.figure()
+plt.plot(times, oriented_stresses[:,0,0] - oriented_stresses[0,0,0], label=r"$\Delta\sigma_{xx}$")
+plt.plot(times, oriented_stresses[:,1,1] - oriented_stresses[0,1,1], label=r"$\Delta\sigma_{yy}$")
+plt.plot(times, oriented_stresses[:,0,1]+oriented_stresses[:,1,0] - (oriented_stresses[0,0,1]+oriented_stresses[0,1,0]), label=r"$2\Delta\sigma_{xy}$")
+plt.legend()
+if MAINTAIN:
+    plt.savefig(IMG_PATH+'Stress_MAINTAIN.png')
+else:
+    plt.savefig(IMG_PATH+'Stress_NOMAINTAIN.png')
+
+
+# plot strain components over time
+plt.figure()
+plt.plot(times[:-1], oriented_strains[:,0,0], label=r"$\epsilon_{xx}$")
+plt.plot(times[:-1], oriented_strains[:,1,1], label=r"$\epsilon_{yy}$")
+plt.plot(times[:-1], oriented_strains[:,0,1]+oriented_strains[:,1,0], label=r"$2\epsilon_{xy}$")
+plt.legend()
+if MAINTAIN:
+    plt.savefig(IMG_PATH+'Strain_MAINTAIN.png')
+else:
+    plt.savefig(IMG_PATH+'Strain_NOMAINTAIN.png')
 
 
 # plot configuration angle over time
@@ -220,9 +348,9 @@ theta_t = getConfigAngle(soln_x1, soln_y1, soln_y2)
 plt.figure()
 plt.plot(times, theta_t)
 if MAINTAIN:
-    plt.savefig(IMG_PATH+'testTheta_MAINTAIN.png')
+    plt.savefig(IMG_PATH+'Theta_MAINTAIN.png')
 else:
-    plt.savefig(IMG_PATH+'testTheta_NOMAINTAIN.png')
+    plt.savefig(IMG_PATH+'Theta_NOMAINTAIN.png')
 
 # plot potential energies over time
 Ustr = (UTotal-Us)/2
@@ -230,16 +358,16 @@ fig, (ax1, ax2) = plt.subplots(1,2, figsize=(10,5), constrained_layout=True)
 ax1.plot(times, Ustr, label='strong', color='blue')
 ax1.plot(times, Us, label='confused', color='orange')
 ax1.set_xlabel('Time')
-ax1.set_ylabel('Potential Energy Change (per contact)')
+ax1.set_ylabel('Potential Energy (per contact)')
 ax1.legend()
 
-ax2.plot(times, oriented_stresses[:,1,1]-oriented_stresses[0,1,1], label=r"$\sigma_{yy}$", color='green')
-ax2.plot(times, oriented_stresses[:,0,0]-oriented_stresses[0,0,0], label=r"$\sigma_{xx}$", color='red')
-ax2.plot(times, oriented_stresses[:,0,1]-oriented_stresses[0,0,1], label=r"$\sigma_{xy}$", color='blue')
+ax2.plot(times, oriented_stresses[:,1,1]-oriented_stresses[0,1,1], label=r"$\Delta\sigma_{yy}$", color='green')
+ax2.plot(times, oriented_stresses[:,0,0]-oriented_stresses[0,0,0], label=r"$\Delta\sigma_{xx}$", color='red')
+ax2.plot(times, oriented_stresses[:,0,1]-oriented_stresses[0,0,1], label=r"$\Delta\sigma_{xy}$", color='blue')
 ax2.legend()
 
 ax2.set_xlabel('Time')
-ax2.set_ylabel('Stress Units')
+ax2.set_ylabel('Relative Change in Stress Components (Stress Units)')
 
 lines, labels = ax2.get_legend_handles_labels()
 
