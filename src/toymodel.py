@@ -206,12 +206,24 @@ P2x1 = -R*sin(theta)*e1 - R*cos(theta)*e2
 P2x2 = -R*sin(theta)*e1 + R*cos(theta)*e2
 P2xs = R*e1
 
+# aa1, bb1 = P2x1[0], P2x1[1]
+# aa2, bb2 = P2x2[0], P2x2[1]
+# aa3, bb3 = P2xs[0], P2xs[1]
+#
+# a = sqrt((aa2 - aa1)**2 + (bb2 - bb1)**2)
+# b = sqrt((aa3 - aa2)**2 + (bb3 - bb2)**2)
+# c = sqrt((aa1 - aa3)**2 + (bb1 - bb3)**2)
+#
+# s = (a + b + c) / 2
+#area = sqrt(s * (s - a) * (s - b) * (s - c))
+area = PI*R*R
+
 # corrected orientation for middle particle
 cf1 = -(fn1+ft1)
 cf2 = fn2+ft2
 cfs = -fs
 
-g = (P + (P2x1.dot(cf1) + P2x2.dot(cf2) + P2xs.dot(cfs))/(2*PI*R*R))/m
+g = (P + 0.5*(P2x1.dot(cf1) + P2x2.dot(cf2) + P2xs.dot(cfs))/(area))/m
 
 # C
 C1 = g.diff(x1)
@@ -221,7 +233,6 @@ C3 = g.diff(y2)
 noddyC = Matrix([C1, C2, C3])
 noddyv = -1*(noddyC.dot(noddyC)**-1)*g.diff(t)
 noddyv = noddyv.subs(x1d, 0).subs(y1d, 0).subs(y2d, 0) # this ensures that it's a partial derivative wrt time
-noddyvdot = noddyv.diff(t)
 
 # we need C dot
 noddyCdot = Matrix([C1.diff(t), C2.diff(t), C3.diff(t)])
@@ -231,7 +242,6 @@ D1 = Matrix([-C2, C1, Float(0.0) ])
 D2 = noddyC.cross(D1)
 noddyD = Matrix([D1[0], D2[0], D1[1], D2[1], D1[2], D2[2]])
 noddyDdot = Matrix([ noddyD[0].diff(t), noddyD[1].diff(t), noddyD[2].diff(t), noddyD[3].diff(t), noddyD[4].diff(t), noddyD[5].diff(t) ])
-
 
 # function, f, for ODE solvers; (acceleration terms removed!)
 print('Finding fns.')
@@ -251,7 +261,6 @@ def fixMe(f):
     return returned
 
 
-
 f1 = fixMe(f1)
 f2 = fixMe(f2)
 f3 = fixMe(f3)
@@ -263,7 +272,6 @@ noddyCdot = fixMe(noddyCdot)
 noddyD = fixMe(noddyD)
 noddyDdot = fixMe(noddyDdot)
 noddyv = fixMe(noddyv)
-noddyvdot = fixMe(noddyvdot)
 
 
 ## lambdify f accordingly
@@ -342,10 +350,6 @@ noddyv_lambda = lambdify((t, x1, y1, y2, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_T
 with open(MODEL_PATH+'hv.pkl', mode='wb') as file:
    cloudpickle.dump(noddyv_lambda, file)
 
-print('Lambdify holonomic v dot.')
-noddyvdot_lambda = lambdify((t, x1, y1, y2, x1d, y1d, y2d, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset), noddyvdot, modules=['sympy'])
-with open(MODEL_PATH+'hvdot.pkl', mode='wb') as file:
-   cloudpickle.dump(noddyvdot_lambda, file)
 
 
 #
