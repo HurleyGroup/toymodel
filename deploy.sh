@@ -7,7 +7,8 @@ export DOCKER_BUILDKIT=1
 echo "Running container...."
 
 echo "Creating model...."
-#docker run -it --rm --name "toy_model_CREATE" -v $PWD:/code adyota/toymodel "/code/scripts/runMODEL.sh"
+docker run -it --rm --name "toy_model_CREATE" -v $PWD:/code adyota/toymodel "/code/scripts/runMODEL.sh"
+docker wait toy_model_CREATE
 
 echo "Running models...."
 ALL_LOADS=(0 200 400 600 800)
