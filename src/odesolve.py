@@ -115,9 +115,6 @@ with open(MODEL_PATH+'hDdot.pkl', mode='rb') as file:
 with open(MODEL_PATH+'hv.pkl', mode='rb') as file:
    hv_lambda = cloudpickle.load(file)
 
-with open(MODEL_PATH+'hvdot.pkl', mode='rb') as file:
-   hvdot_lambda = cloudpickle.load(file)
-
 
 def hC_lambdaN(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset):
     g = hC_lambda(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
@@ -147,10 +144,6 @@ def hDdot_lambdaN(t,a,b,c,d,e,f, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE
 
 def hv_lambdaN(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset):
     g = hv_lambda(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
-    return float(g)
-
-def hvdot_lambdaN(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset):
-    g = hvdot_lambda(t,a,b,c, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, KS_RATE_DROP, P, x10, y10, y20, init_offset)
     return float(g)
 
 
