@@ -64,9 +64,9 @@ xfs = R*e1
 
 
 # assemble constraint function
-f = lambdify(dn, (P + 0.5*(xf1.dot(fn1) + xf2.dot(fn2) + xfs.dot(fns))/(PI*R*R))**2)
+area = PI*R*R
 
-
+f = lambdify(dn, (P + 0.5*(xf1.dot(fn1) + xf2.dot(fn2) + xfs.dot(fns))/(area))**2)
 
 
 ## Now find dn for which the hydrostatic constraint will be met
