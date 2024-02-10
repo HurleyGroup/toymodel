@@ -1,5 +1,13 @@
 from scipy.integrate._ivp.base import OdeSolver
-from tqdm import tqdm
+from tqdm_loggable.tqdm_logging import tqdm_logging
+from tqdm_loggable.auto import tqdm
+import logging, datetime
+
+fmt = f"%(filename)-20s:%(lineno)-4d %(asctime)s %(message)s"
+logging.basicConfig(level=logging.INFO, format=fmt, handlers=[logging.StreamHandler()])
+tqdm_logging.set_level(logging.INFO)
+tqdm_logging.set_log_rate(datetime.timedelta(seconds=300)) # every five minutes
+
 
 # save the old methods - we still need them
 old_init = OdeSolver.__init__
@@ -195,7 +203,7 @@ def helperNOMAINTAIN(t, vars, LOAD, LOAD_TIME, KS, KS_RATE_RISE, KS_TIME_RISE, K
 print('Integrating.')
 start = 0
 end = INT_TIME
-points = 500
+points = int(os.environ['NUM_POINTS'])
 tspan = np.linspace(start, end, points)
 
 if MAINTAIN:
