@@ -9,12 +9,13 @@ export M=40
 export CA=22
 
 # ks function (should only start changing after ramp finishes)
-export KS_TIME_RISE=0.1
+export KS_TIME_RISE=4.0
 export KS_TIME_DROP=0.00
 export KS_RATE_DROP=0.00
+export NUM_POINTS=10000
 
 # load ramp
-export LOAD_TIME=0.001 # ramp time
+export LOAD_TIME=0.0001 # ramp time
 
 # execution flags
 export DEBUG=false
