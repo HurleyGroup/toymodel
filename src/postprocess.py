@@ -1,5 +1,6 @@
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 from matplotlib import pyplot as plt
+import mpl_axes_aligner
 import numpy as np
 import cloudpickle
 import argparse
@@ -280,7 +281,7 @@ for t in range(len(total_strain)):
     total_strain[t] = (total_strain[t]+total_strain[t].T)/2. # symmetric part of deformation gradient is strain
 
 total_strain = np.cumsum(total_strain, axis=0)
-oriented_strains = rotate_stress(total_strain, 15)
+oriented_strains = rotate_stress(total_strain, -15)
 
 
 # create animation of particles buckling/fluttering
@@ -295,7 +296,7 @@ UTotal, Us, Ut = compute_pe(UTotal_lambda, Us_lambda, Ut_lambda,
 
 print('Computing Stresses.')
 stresses = compute_stress(cf1, cfs, cf2, soln_x1, soln_y1, soln_y2)
-oriented_stresses = rotate_stress(stresses, 15)
+oriented_stresses = rotate_stress(stresses, -15)
 
 
 print('Generating Plots.')
@@ -353,23 +354,31 @@ else:
     plt.savefig(IMG_PATH+'Theta_NOMAINTAIN.png')
 
 # plot potential energies over time
-Ustr = (UTotal-Us)/2
-fig, (ax1, ax2) = plt.subplots(1,2, figsize=(10,5), constrained_layout=True)
-ax1.plot(times, Ustr, label='strong', color='blue')
-ax1.plot(times, Us, label='confused', color='orange')
+fig, ax1  = plt.subplots(1, figsize=(7,7), constrained_layout=True)
+ax2 = ax1.twinx()
+
+ax2.plot(times, UTotal-UTotal[0], label=r'$\Delta$PE', color='black')
+ax2.set_ylabel('Relative Change in Total Potential Energy (Energy Units)')
+
+ax1.plot(times, oriented_stresses[:,1,1]-oriented_stresses[0,1,1], label=r"$\Delta\sigma_{yy}$", color='green')
+ax1.plot(times, oriented_stresses[:,0,0]-oriented_stresses[0,0,0], label=r"$\Delta\sigma_{xx}$", color='red')
+ax1.plot(times, oriented_stresses[:,0,1]-oriented_stresses[0,0,1], label=r"$\Delta\sigma_{xy}$", color='blue')
 ax1.set_xlabel('Time')
-ax1.set_ylabel('Potential Energy (per contact)')
-ax1.legend()
+ax1.set_ylabel('Relative Change in Stress Components (Stress Units)')
 
-ax2.plot(times, oriented_stresses[:,1,1]-oriented_stresses[0,1,1], label=r"$\Delta\sigma_{yy}$", color='green')
-ax2.plot(times, oriented_stresses[:,0,0]-oriented_stresses[0,0,0], label=r"$\Delta\sigma_{xx}$", color='red')
-ax2.plot(times, oriented_stresses[:,0,1]-oriented_stresses[0,0,1], label=r"$\Delta\sigma_{xy}$", color='blue')
-ax2.legend()
+handles1, labels1 = ax1.get_legend_handles_labels()
+handles2, labels2 = ax2.get_legend_handles_labels()
 
-ax2.set_xlabel('Time')
-ax2.set_ylabel('Relative Change in Stress Components (Stress Units)')
+# Combine handles and labels
+handles = handles1 + handles2
+labels = labels1 + labels2
 
-lines, labels = ax2.get_legend_handles_labels()
+ax1.legend(handles, labels)
+
+mpl_axes_aligner.align.yaxes(ax1, 0, ax2, 0, 0.5)
+
+ax1.set_box_aspect(1)
+ax2.set_box_aspect(1)
 
 if MAINTAIN:
     plt.savefig(IMG_PATH+'PEnStress_MAINTAIN.png')
