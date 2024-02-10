@@ -28,6 +28,9 @@ ENV PATH="/AnacondaInstall/bin/:${PATH}"
 ## install matplotlib, sympy, and cloudpickle
 RUN bash -c "mamba install matplotlib sympy cloudpickle scipy -y"
 
+## install axes aligner and tqdm-loggable
+RUN bash -c "pip install mpl-axes-aligner tqdm-loggable"
+
 ## set normal and set code to env
 WORKDIR /
 ENV CODE_PATH="/code"
