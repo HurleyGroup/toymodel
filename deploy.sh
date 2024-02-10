@@ -11,7 +11,7 @@ docker wait toy_model_CREATE
 
 echo "Running models...."
 ALL_LOADS=(450 475 490 505 520)
-HYDROSTATIC=(1000 4460 4560 4650)
+HYDROSTATIC=(4460 4560 4650)
 ALL_KS=(3000 6000 9000 12000 15000)
 ALL_KS_RATE=(-1000 -500 -100 0 100 500 1000)
 
@@ -19,14 +19,14 @@ ALL_KS_RATE=(-1000 -500 -100 0 100 500 1000)
 for l in ${ALL_LOADS[@]};
 do
     echo "toy_model_LOAD_${l}"
-    docker run -e LOAD=${l} -e PRESSURE=${HYDROSTATIC[2]} -e KS_START=${ALL_KS[2]} -e KS_RATE_RISE=${ALL_KS_RATE[2]} -d --rm --name "toy_model_LOAD_${l}" -v $PWD:/code adyota/toymodel "/code/scripts/run.sh"
+    docker run -e LOAD=${l} -e PRESSURE=${HYDROSTATIC[1]} -e KS_START=${ALL_KS[2]} -e KS_RATE_RISE=${ALL_KS_RATE[3]} -d --rm --name "toy_model_LOAD_${l}" -v $PWD:/code adyota/toymodel "/code/scripts/run.sh"
 done
 
 # vary PRESSURE
 for h in ${HYDROSTATIC[@]};
 do
     echo "toy_model_HYDROSTATIC_${h}"
-    docker run -e LOAD=${ALL_LOADS[2]} -e PRESSURE=${h} -e KS_START=${ALL_KS[2]} -e KS_RATE_RISE=${ALL_KS_RATE[2]} -d --rm --name "toy_model_HYDROSTATIC_${h}" -v $PWD:/code adyota/toymodel "/code/scripts/run.sh"
+    docker run -e LOAD=${ALL_LOADS[2]} -e PRESSURE=${h} -e KS_START=${ALL_KS[2]} -e KS_RATE_RISE=${ALL_KS_RATE[3]} -d --rm --name "toy_model_HYDROSTATIC_${h}" -v $PWD:/code adyota/toymodel "/code/scripts/run.sh"
 done
 
 
@@ -34,7 +34,7 @@ done
 for ks in ${ALL_KS[@]};
 do
     echo "toy_model_ALL_KS_${ks}"
-    docker run -e LOAD=${ALL_LOADS[2]} -e PRESSURE=${HYDROSTATIC[2]} -e KS_START=${ks} -e KS_RATE_RISE=${ALL_KS_RATE[2]} -d --rm --name "toy_model_ALL_KS_${ks}" -v $PWD:/code adyota/toymodel "/code/scripts/run.sh"
+    docker run -e LOAD=${ALL_LOADS[2]} -e PRESSURE=${HYDROSTATIC[1]} -e KS_START=${ks} -e KS_RATE_RISE=${ALL_KS_RATE[3]} -d --rm --name "toy_model_ALL_KS_${ks}" -v $PWD:/code adyota/toymodel "/code/scripts/run.sh"
 done
 
 
@@ -42,7 +42,7 @@ done
 for ksr in ${ALL_KS_RATE[@]};
 do
     echo "toy_model_ALL_KS_RATE_${ksr}"
-    docker run -e LOAD=${ALL_LOADS[2]} -e PRESSURE=${HYDROSTATIC[2]} -e KS_START=${ALL_KS[2]} -e KS_RATE_RISE=${ksr} -d --rm --name "toy_model_ALL_KS_RATE_${ksr}" -v $PWD:/code adyota/toymodel "/code/scripts/run.sh"
+    docker run -e LOAD=${ALL_LOADS[2]} -e PRESSURE=${HYDROSTATIC[1]} -e KS_START=${ALL_KS[2]} -e KS_RATE_RISE=${ksr} -d --rm --name "toy_model_ALL_KS_RATE_${ksr}" -v $PWD:/code adyota/toymodel "/code/scripts/run.sh"
 done
 
 
