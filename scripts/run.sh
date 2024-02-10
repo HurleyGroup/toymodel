@@ -6,7 +6,7 @@ export R=0.05
 export KN=400000
 export KT=200000
 export M=40
-export CA=23
+export CA=22
 
 # ks function (should only start changing after ramp finishes)
 export KS_TIME_RISE=0.1
