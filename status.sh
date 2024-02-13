@@ -1,3 +1,3 @@
 #!/bin/fish
 
-docker logs -f toy_model_LOAD_490
+docker logs -f toy_model_ALL_KS_RATE_500  
