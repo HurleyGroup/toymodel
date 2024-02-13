@@ -102,7 +102,7 @@ def save_animation(positions):
     ani = FuncAnimation(fig, update, frames=num_frames, blit=True)
 
     # Specify the output format and create the writer (60 fps)
-    writer = FFMpegWriter(fps=30, metadata=dict(artist='Adyota Gupta'), bitrate=1800)
+    writer = FFMpegWriter(fps=120, metadata=dict(artist='Adyota Gupta'), bitrate=1800)
 
     # Save the animation as an MP4 file
     if MAINTAIN:
@@ -218,8 +218,40 @@ def get_normals(x1, x2, x3, ccw):
 
 # obtain particle positions and velocities
 times, soln_x1, soln_y1, soln_y2, soln_vx1, soln_vy1, soln_vy2  = soln
+
+def get_mask_before_b(arr, b):
+    # Find the index where the array first crosses the threshold value b
+    crossing_index = np.where(np.diff(np.sign(arr - b)) != 0)[0]
+
+    if len(crossing_index) > 0:
+        # If crossing index is found, return the portion of the array up to the crossing point
+        mask = np.arange(len(arr)) <= crossing_index[0]
+        return mask
+    else:
+        # If crossing index is not found, return the entire array
+        return np.ones_like(arr, dtype=bool)
+
+
+if KS_RATE_RISE > 0:
+    THETA_LIMIT = 0.
+else:
+    THETA_LIMIT = 60.
+
+NUM_STEPS = len(times)
+angleMask = get_mask_before_b(getConfigAngle(soln_x1, soln_y1, soln_y2), THETA_LIMIT)
+times = times[angleMask]
+soln_x1 = soln_x1[angleMask]
+soln_y1 = soln_y1[angleMask]
+soln_y2 = soln_y2[angleMask]
+soln_vx1 = soln_vx1[angleMask]
+soln_vy1 = soln_vy1[angleMask]
+soln_vy2 = soln_vy2[angleMask]
 NUM_STEPS = len(times)
 
+
+# create animation of particles buckling/fluttering
+print('Creating animation.')
+#save_animation([soln_x1, soln_y1, soln_y2])
 
 
 print('Computing Contact Forces.')
@@ -281,12 +313,10 @@ for t in range(len(total_strain)):
     total_strain[t] = (total_strain[t]+total_strain[t].T)/2. # symmetric part of deformation gradient is strain
 
 total_strain = np.cumsum(total_strain, axis=0)
-oriented_strains = rotate_stress(total_strain, -15)
+oriented_strains = rotate_stress(total_strain, 9) #15)
 
 
-# create animation of particles buckling/fluttering
-print('Creating animation.')
-save_animation([soln_x1, soln_y1, soln_y2])
+
 
 print('Computing U.')
 UTotal, Us, Ut = compute_pe(UTotal_lambda, Us_lambda, Ut_lambda,
@@ -296,14 +326,22 @@ UTotal, Us, Ut = compute_pe(UTotal_lambda, Us_lambda, Ut_lambda,
 
 print('Computing Stresses.')
 stresses = compute_stress(cf1, cfs, cf2, soln_x1, soln_y1, soln_y2)
-oriented_stresses = rotate_stress(stresses, -15)
+oriented_stresses = rotate_stress(stresses, 9) #)
 
 
 print('Generating Plots.')
+# plot areas over time
+plt.figure()
+plt.plot(times, areas)
+if MAINTAIN:
+    plt.savefig(IMG_PATH+'A_MAINTAIN.png')
+else:
+    plt.savefig(IMG_PATH+'A_NOMAINTAIN.png')
+
 # plot hydrostatic stress over time
 plt.figure()
 plt.plot(times, 0.5*(oriented_stresses[:,0,0]+oriented_stresses[:,1,1]))
-plt.ylim(-5000,0)
+#plt.ylim(-5000,0)
 if MAINTAIN:
     plt.savefig(IMG_PATH+'H_MAINTAIN.png')
 else:
@@ -356,15 +394,15 @@ else:
 # plot potential energies over time
 fig, ax1  = plt.subplots(1, figsize=(7,7), constrained_layout=True)
 ax2 = ax1.twinx()
-
+Ustr = (UTotal-Us)/2.0
 ax2.plot(times, UTotal-UTotal[0], label=r'$\Delta$PE', color='black')
-ax2.set_ylabel('Relative Change in Total Potential Energy (Energy Units)')
+ax2.set_ylabel(r'Change in PE')
 
 ax1.plot(times, oriented_stresses[:,1,1]-oriented_stresses[0,1,1], label=r"$\Delta\sigma_{yy}$", color='green')
 ax1.plot(times, oriented_stresses[:,0,0]-oriented_stresses[0,0,0], label=r"$\Delta\sigma_{xx}$", color='red')
 ax1.plot(times, oriented_stresses[:,0,1]-oriented_stresses[0,0,1], label=r"$\Delta\sigma_{xy}$", color='blue')
 ax1.set_xlabel('Time')
-ax1.set_ylabel('Relative Change in Stress Components (Stress Units)')
+ax1.set_ylabel('Change in Stress Components')
 
 handles1, labels1 = ax1.get_legend_handles_labels()
 handles2, labels2 = ax2.get_legend_handles_labels()
@@ -373,7 +411,7 @@ handles2, labels2 = ax2.get_legend_handles_labels()
 handles = handles1 + handles2
 labels = labels1 + labels2
 
-ax1.legend(handles, labels)
+ax1.legend(handles, labels, loc=2)
 
 mpl_axes_aligner.align.yaxes(ax1, 0, ax2, 0, 0.5)
 
