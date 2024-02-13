@@ -9,7 +9,7 @@ export M=40
 export CA=22
 
 # ks function (should only start changing after ramp finishes)
-export KS_TIME_RISE=4.0
+export KS_TIME_RISE=3.0
 export KS_TIME_DROP=0.00
 export KS_RATE_DROP=0.00
 export NUM_POINTS=10000
@@ -18,7 +18,7 @@ export NUM_POINTS=10000
 export LOAD_TIME=0.0001 # ramp time
 
 # execution flags
-export DEBUG=false
+export DEBUG=true
 
 # Paths of interest
 export MODEL_PATH_BASE="/code/model/"
@@ -42,10 +42,10 @@ fi
 
 
 # solve for initial conditions
-python -u /code/src/initCond.py -p $STRESS_PATH
+#python -u /code/src/initCond.py -p $STRESS_PATH
 
 # perform integration on DAE
-python -u /code/src/odesolve.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG --maintain
+#python -u /code/src/odesolve.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG --maintain
 
 # post process results
 python -u /code/src/postprocess.py -mp $MODEL_PATH_BASE -p $STRESS_PATH -i $STRESS_IMG --maintain
