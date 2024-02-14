@@ -22,8 +22,8 @@ export DEBUG=true
 
 # Paths of interest
 export MODEL_PATH_BASE="/code/model/"
-export POST_PATH_BASE="/code/post"
-export IMG_PATH_BASE="/code/images"
+export POST_PATH_BASE="/code/post/maintain"
+export IMG_PATH_BASE="/code/images/maintain"
 
 # Paths to save data [hc == hydrostatic constraint | nhc == no hydrostatic constraint]
 STRESS_PATH="$POST_PATH_BASE/${PRESSURE}_${LOAD}_${KS_START}_${KS_RATE_RISE}/"
