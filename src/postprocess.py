@@ -251,7 +251,7 @@ NUM_STEPS = len(times)
 
 # create animation of particles buckling/fluttering
 print('Creating animation.')
-#save_animation([soln_x1, soln_y1, soln_y2])
+save_animation([soln_x1, soln_y1, soln_y2])
 
 
 print('Computing Contact Forces.')
